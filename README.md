@@ -1,4 +1,4 @@
-# Odyssey2/Videopac for [MiSTer](https://github.com/MiSTer-devel/Main_MiSTer/wiki) 
+# [Magnavox Odyssey2/Videopac](https://en.wikipedia.org/wiki/Magnavox_Odyssey_2) for [MiSTer Platform](https://github.com/MiSTer-devel/Main_MiSTer/wiki) 
 
 ### This is an FPGA implementation of the Magnavox Odyssey2 based on [FPGA Videopac](http://www.fpgaarcade.com/?q=node%2F14) by Arnim Laeuger and ported to MiSTer (With additional work from wsoltys).
 
