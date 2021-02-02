@@ -803,7 +803,7 @@ sp0256 sp0256 (
                .lrq        (ldq),
                .data_in    (rom_addr[6:0]),
                .ald        (ald),
-               .audio_out  (signed_voice_out)
+               .audio_out  (voice_out)
 );
 
 
