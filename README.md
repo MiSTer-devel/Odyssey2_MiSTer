@@ -1,12 +1,10 @@
-<<<<<<< HEAD
 # [Magnavox Odyssey2/Videopac](https://en.wikipedia.org/wiki/Magnavox_Odyssey_2) for [MiSTer Platform](https://github.com/MiSTer-devel/Main_MiSTer/wiki) 
 
 ### This is an FPGA implementation of the Magnavox Odyssey2 based on [FPGA Videopac](http://www.fpgaarcade.com/?q=node%2F14) by Arnim Laeuger and ported to MiSTer (With additional work from wsoltys).
 =======
 # Videopac G7000 / Odyssey2 for FPGA.
 
-### This is an FPGA implementation of the Magnavox Oddysey2/Videopac G700 based on FPGA videopac by Arnim Laeuger and ported to MiSTer (With additional work from wsoltys) by [Jamie Dickson](https://github.com/Kitrinx).
->>>>>>> kitrinx/master
+### This is an FPGA implementation of the Magnavox Oddysey2/Videopac G700 based on FPGA videopac by Arnim Laeuger and ported to MiSTer (With additional work from wsoltys) by [Kitrinx](https://github.com/Kitrinx).
 
 ## Features
  * Switch between Odyssey2 and Videopac mode.
