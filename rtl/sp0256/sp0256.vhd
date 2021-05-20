@@ -135,7 +135,8 @@ architecture syn of sp0256 is
  signal clk_2m5_n : std_logic;
  signal rom_addr : std_logic_vector(13 downto 0);
  signal rom_do   : std_logic_vector( 7 downto 0);
-
+ signal bank 	  : std_logic_vector( 1 downto 0);
+ 
  signal stage : integer range 0 to 24; -- stage counter 0-24;
  signal stage_t : integer;
  signal stage_r : integer;
@@ -214,7 +215,7 @@ process (clk_2m5, reset)
 		stage_t <= 0;
 	else
       if rising_edge(clk_2m5) then
-			if stage_t >= 240 then 
+			if stage_t >= 249 then 
 				stage_t <= 0;
 			else
 				stage_t <= stage_t + 1;
@@ -229,6 +230,7 @@ process (clk_2m5, reset)
 		lrq_in <= '1';
 		sound_on  <= '0';
 		noise_rng <= X"0001";
+		bank <= "00";
 	else
       if rising_edge(clk_2m5) then
 			
@@ -243,13 +245,19 @@ process (clk_2m5, reset)
 			if sound_on = '0' then
 			
 				if stage = 0 and lrq_in = '0' then
-					allo_entry <=          allophone*"11";
-					rom_addr   <= "00000"&(allophone*"11");
-					line_cnt   <= (others => '0');
-					rpt_cnt    <= (others => '0');
-					per_cnt    <= (others => '0');
-					sound_on   <= '1';
-					lrq_in <= '1';
+				 if allophone = "1100100" then bank <= "00";
+						elsif allophone = "1101000" then bank <= "01";
+						elsif allophone = "1101001" then bank <= "10";
+						elsif allophone = "1101010" then bank <= "11";
+						elsif allophone <= "1011111" or allophone >= "1110000" then --filter the playable sounds
+					                                                            allo_entry <=          allophone*"11";
+																								   rom_addr   <= "00000"&(allophone*"11");
+					                                                            line_cnt   <= (others => '0');
+					                                                            rpt_cnt    <= (others => '0');
+					                                                            per_cnt    <= (others => '0');
+					                                                            sound_on   <= '1';					                                                            
+						end if;
+						lrq_in <= '1';
 				end if;
 				
 			else -- sound is on	
@@ -459,26 +467,11 @@ sum_out <= to_signed( 32767,16) when sum_out_ul >  32767 else
 			  to_signed(-32768,16) when sum_out_ul < -32768 else
 			  sum_out_ul;
 			  
-
--- sp0256-al2 prom (decoded)
---sp0256_al2_decoded : entity work.sp0256_al2_decoded
---port map(
--- clk  => clk_2m5_n,
--- addr => rom_addr(13 downto 0),
--- data => rom_do  
---);
-
-sp0256_003_decoded : ENTITY work.sp0256_003_decoded
+sp256_003 : ENTITY work.sp256_003
 port map(
- clk  => clk_2m5_n,
- addr => rom_addr,
- data => rom_do  
+ clock  => clk_2m5_n,
+ address => bank & rom_addr,
+ q => rom_do  
 );
 
---sp0256_004_decoded : ENTITY work.sp0256_004_decoded
---port map(
--- clk  => clk_2m5_n,
--- addr => rom_addr,
--- data => rom_do  
---);
 end syn;
