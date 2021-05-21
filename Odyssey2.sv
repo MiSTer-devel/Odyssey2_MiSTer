@@ -217,7 +217,7 @@ assign VIDEO_ARY = (!status[19:18]) ? (status[14] ? 12'd4 : 12'd3) : 12'd0;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXXXXX  X   XX
+// XXXXX XXXXXXXXXX  XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -228,10 +228,9 @@ parameter CONF_STR = {
 	"-;",
 	"F3,CHR,Change VDC font;",
 	"-;",
-	"OE,System,Odyssey2,Videopac;",
-	"O6,Palette,Tv (RF),RGB;",
-	"O4,TV Set,Color,B/W;",
-	"OIJ,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
+   "OF,System,Odyssey2,Videopac;",
+   "OCE,G7200,Off,Contrast 1,Contrast 2,Contrast 3,Contrast 4,Contrast 5,Contrast 6,Contrast 7;",
+ 	"OIJ,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O9B,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"O1,The Voice,Off,On;",
 	"-;",
@@ -286,12 +285,12 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 	.ps2_key(ps2_key)
 );
 
-wire       PAL = status[14];
+wire       PAL = status[15];
 wire       joy_swap = status[7];
 
 wire       VOICE = status[1];
-wire       MODE = status[6];
-wire       SCREEN = status[4];
+wire       G7200    = (CONTRAST != 3'd0);
+wire [2:0] CONTRAST = status[14:12];
 
 wire [15:0] joya = joy_swap ? joystick_1 : joystick_0;
 wire [15:0] joyb = joy_swap ? joystick_0 : joystick_1;
@@ -352,7 +351,7 @@ always @(posedge CLK_50M) begin : cfg_block
 	reg pald = 0, pald2 = 0;
 	reg [3:0] state = 0;
 
-	pald <= status[14];
+	pald <= status[15];
 	pald2 <= pald;
 
 	cfg_write <= 0;
@@ -603,7 +602,28 @@ wire HBlank;
 
 wire ce_pix = clk_vdc_en;
 
-wire [23:0] colors = MODE ? color_lut_pal[{R, G, B, luma}] : color_lut_ntsc[{R, G, B, luma}];
+wire [7:0] Rx = color_lut_ntsc[{R, G, B, luma}][23:16];
+wire [7:0] Gx = color_lut_ntsc[{R, G, B, luma}][15:8];
+wire [7:0] Bx = color_lut_ntsc[{R, G, B, luma}][7:0];
+wire [7:0] Ry = color_lut_pal[{R, G, B, luma}][23:16];
+wire [7:0] Gy = color_lut_pal[{R, G, B, luma}][15:8];
+wire [7:0] By = color_lut_pal[{R, G, B, luma}][7:0];
+
+always @(*) begin
+        casex (CONTRAST)
+           3'd1:    colors <= {{Ry[7:1],By[7]}  ,{Gy[7]  ,Ry[7:1]},{Ry[7:1],By[7]}  };
+                3'd2:    colors <= {{Ry[7:2],By[7:6]},{Gy[7:6],Ry[7:2]},{Ry[7:2],By[7:6]}};
+                3'd3:    colors <= {{Ry[7:4],By[7:4]},{Gy[7:4],Ry[7:4]},{Ry[7:4],By[7:4]}};
+                3'd4:    colors <= {Ry,Gy,By};
+                3'd5:    colors <= {{By[7:4],Ry[7:4]},{Gy[7:4],By[7:4]},{By[7:4],Ry[7:4]}};
+                3'd6:    colors <= {{By[7:2],Ry[7:6]},{Gy[7:6],By[7:2]},{By[7:2],Ry[7:6]}};
+                3'd7:    colors <= {{By[7:1],Ry[7]}  ,{Gy[7]  ,By[7:1]},{By[7:1],Ry[7]}  };
+           default: colors <= {Ry,Gy,By};
+        endcase
+end
+
+
+wire [23:0] colors;
 
 assign CLK_VIDEO = clk_sys;
 assign VGA_SL = sl[1:0];
@@ -614,13 +634,14 @@ wire [2:0] scale = status[11:9];
 wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
 
 
-wire [9:0] grayscale;
+wire [7:0] grayscale;
+
 vga_to_greyscale vga_to_greyscale
 (
-	.r_in  ({colors[23:18],colors[23:20]}),
-	.g_in  ({colors[15:10],colors[15:12]}),
-	.b_in  ({colors[7:2],colors[7:4]}),
-	.y_out (grayscale)
+        .r_in  (colors[23:16]),
+        .g_in  (colors[15:8]),
+        .b_in  (colors[7:0]),
+        .y_out (grayscale)
 );
 
 
@@ -639,9 +660,9 @@ video_mixer #(.LINE_LENGTH(455)) video_mixer
 	.hq2x(scale==1),
 	.mono(0),
 
-	.R(SCREEN ? grayscale[9:2] : colors[23:16]),
-	.G(SCREEN ? grayscale[9:2] : colors[15:8] ),
-	.B(SCREEN ? grayscale[9:2] : colors[7:0]  )
+	.R(G7200 ? grayscale : Rx),
+   .G(G7200 ? grayscale : Gx),
+   .B(G7200 ? grayscale : Bx)
 
 );
 

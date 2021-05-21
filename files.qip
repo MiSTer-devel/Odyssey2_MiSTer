@@ -104,3 +104,5 @@ set_global_assignment -name VHDL_FILE rtl/vp_console_comp_pack-p.vhd
 set_global_assignment -name VHDL_FILE rtl/vp_console.vhd
 set_global_assignment -name CDF_FILE jtag.cdf
 set_global_assignment -name QIP_FILE sys/sys.qip
+set_global_assignment -name QIP_FILE rtl/sp0256/sp256_003.qip
+
