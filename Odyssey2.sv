@@ -202,9 +202,9 @@ assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DD
 assign VGA_F1 = 0;
 assign VGA_SCALER = 0;
 
-assign LED_DISK = 0;
+assign LED_DISK = ioctl_download;
 assign LED_POWER = 0;
-assign LED_USER  = ioctl_download;
+assign LED_USER  = 0;
 assign BUTTONS = 0;
 
 assign VIDEO_ARX = (!status[19:18]) ? (status[14] ? 12'd5 : 12'd4) : (status[19:18] - 1'd1);
@@ -303,16 +303,21 @@ wire clock_locked;
 wire clk_2m5;
 wire clk_sys;
 
-// pll pll
-// (
-// 	.refclk(CLK_50M),
-// 	.rst(0),
-// 	//.outclk_0(clk_sys_o2),
-// 	.outclk_0(clk_sys),
-// 	.outclk_1(clk_sys_vp),
-// 	.outclk_2(clk_2m5),
-// 	.locked(clock_locked)
-// );
+
+////////////The Voice /////////////////////////////////////////////////
+
+
+wire clk_250k;  
+
+ 
+pll_thevoice pll_thevoice
+( 
+  .inclk0(CLK_50M),
+  .c0    (clk_250k),
+  .c1    (clk_2m5)
+);
+
+////////////////////////////////////////////////////////////////////////
 
 wire [63:0] reconfig_to_pll;
 wire [63:0] reconfig_from_pll;
@@ -321,7 +326,7 @@ pll pll
 (
 	.refclk(CLK_50M),
 	.rst(0),
-	.outclk_0(clk_2m5),
+	.outclk_0(),
 	.outclk_1(clk_sys),
 	.reconfig_to_pll(reconfig_to_pll),
 	.reconfig_from_pll(reconfig_from_pll),
@@ -459,6 +464,8 @@ vp_console vp
 	.clk_i          (clk_sys),
 	.clk_cpu_en_i   (clk_cpu_en),
 	.clk_vdc_en_i   (clk_vdc_en),
+	.clk_250k       (clk_250k),
+	.clk_2m5        (clk_2m5),
 
 	.res_n_i        (~reset & joy_reset), // low to reset
 
@@ -472,7 +479,7 @@ vp_console vp
 	.cart_bs0_o     (cart_bank_0), // Bank switch 0
 	.cart_bs1_o     (cart_bank_1), // Bank Switch 1
 	.cart_psen_n_o  (cart_rd_n),   // Program Store Enable (read)
-	.cart_t0_i      (kb_read_ack || !ldq), // KB/Voice ack
+	.cart_t0_i      (),
 	.cart_t0_o      (),
 	.cart_t0_dir_o  (),
 	// Char Rom data
@@ -503,8 +510,13 @@ vp_console vp
 
 	// Sound
 	.snd_o          (),
-	.snd_vec_o      (snd)
-);
+	.snd_vec_o      (snd),
+	
+	//The voice
+	.voice_enable   (VOICE),
+	.noise_voice_o  (noise_voice),
+	.snd_voice_o    (voice_out)
+); 
 
 ////////////////////////////////////////////////////////////////////////
 rom  rom
@@ -572,18 +584,18 @@ always @(*)
 ////////////////////////////  SOUND  ////////////////////////////////////
 
 wire [3:0] snd;
+wire signed [15:0] voice_out; 
+wire signed [15:0] noise_voice;
 wire cart_wr_n;
 wire [7:0] cart_di;
 
-// The Voice info:
-// $80 to $FF voice writes
-// Voice bank select:
-// $E4 internal voice rom bank
-// $E8, $E9, and $EA external rom banks
-// T0_i high if SP0256 command buffer full
+wire signed [14:0] sound_s = {1'b0,snd,snd,snd,2'b0};
+//wire signed [14:0] voice_s = VOICE ? {voice_out[9],voice_out[9:1],4'b0} : 14'b0;
+wire signed [15:0] voice_s = VOICE ? {1'b0,voice_out[11:0],voice_out[15:10]} : 16'b0;
 
-assign AUDIO_L = VOICE ? {4'b0,snd,snd,4'b0} + voice_out * 2 :{2'b0, snd, snd,6'b0};//{audio, 6'd0};
-assign AUDIO_R = AUDIO_L;
+//assign AUDIO_L = sound_s + voice_s;
+assign AUDIO_L = {voice_out[11:0],noise_voice[15:12]};
+assign AUDIO_R = snd;
 assign AUDIO_S = 1;
 assign AUDIO_MIX = 0;
 
@@ -809,39 +821,6 @@ wire [1:0] joy_right  = {~joya[0], ~joyb[0]};
 wire [1:0] joy_action = {~joya[4], ~joyb[4]};
 wire       joy_reset  = ~joya[5] & ~joyb[5];
 
-
-
-////////////The Voice /////////////////////////////////////////////////
-
-
-reg signed [9:0] voice_out;
-wire ldq;
-         
-
-sp0256 sp0256 (
-               .clk_2m5    (clk_2m5),
-               .reset      (rst_a_n),
-               .lrq        (ldq),
-               .data_in    (rom_addr[6:0]),
-               .ald        (ald),
-               .audio_out  (voice_out)
-);
-
-
-
-wire ald     = !rom_addr[7] | cart_wr_n | cart_cs;
-wire rst_a_n;
-
-
-
-ls74 ls74
-(
-		 .d     (cart_di[5]),
-       .clr   (VOICE? 1'b1: 1'b0),
-       .q     (rst_a_n),
-       .pre   (1'b1),
-       .clk   (ald)
-);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

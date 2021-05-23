@@ -9,15 +9,14 @@
 ---------------------------------------------------------------------------------
 -- sp0256 (player) releases 
 --
---
---  rev 1.1-rw - 28/01/2021
---      changed signals to be the same that the real thing and clock to 2.5Mhz
+--  rev 0.0 - 14/04/2018 
+--			play only sp0256-al2 (cmd 00-3F, 12 bits rom address)
 --
 --	 rev 1.0 - 23/07/2018
 --			extend to play sp0256b_019 + spr128_003 (cmd 00-7F, 14 bits rom address)
 --
---  rev 0.0 - 14/04/2018 
---			play only sp0256-al2 (cmd 00-3F, 12 bits rom address)
+--	 rev 2.0 - 26/07/2019 - by Victor Trucco
+--			sound banks handling
 --
 ---------------------------------------------------------------------------------
 --
@@ -119,28 +118,31 @@ use ieee.numeric_std.all;
 entity sp0256 is
 port
 (
-	clk_2m5     : in std_logic;
-	reset          : in std_logic;
+	clock_250k   : in std_logic;
+	clock_2m5    : in std_logic;
+	reset        : in std_logic;
 
-	lrq            : out std_logic;
-	data_in        : in  std_logic_vector(6 downto 0);
-	ald            : in  std_logic;
+	input_rdy      : out std_logic;
+
+	allophone      : in  std_logic_vector(6 downto 0);
+	trig_allophone : in  std_logic;
 	
-	audio_out      : out signed(9 downto 0)
+	noise_out    : out signed(15 downto 0);
+	audio_out    : out signed(15 downto 0)
+	
+		
 );
 end sp0256;
 
 architecture syn of sp0256 is
   
- signal clk_2m5_n : std_logic;
- signal rom_addr : std_logic_vector(13 downto 0);
- signal rom_do   : std_logic_vector( 7 downto 0);
- signal bank 	  : std_logic_vector( 1 downto 0);
+ signal clock_250k_n  : std_logic;
+ signal rom_addr 		: std_logic_vector(13 downto 0);
+ signal rom_do   		: std_logic_vector( 7 downto 0);
+ signal bank 			: std_logic_vector( 1 downto 0);
+
+ signal stage : integer range 0 to 249; -- stage counter 0-24;
  
- signal stage : integer range 0 to 24; -- stage counter 0-24;
- signal stage_t : integer;
- signal stage_r : integer;
- signal allophone                     : std_logic_vector(6 downto 0);
  signal allo_entry                   : std_logic_vector(8 downto 0);
  signal allo_addr_lsb, allo_addr_msb : std_logic_vector(7 downto 0);
  signal allo_nb_line                 : std_logic_vector(7 downto 0);
@@ -152,11 +154,10 @@ architecture syn of sp0256 is
  signal sum_in1,sum_out_ul : signed(15 downto 0);
  signal sum_out            : signed(15 downto 0);
  signal divider            : std_logic;
- signal audio              : signed(9 downto 0);
- signal audio_int          : signed(8 downto 0);
- 
+ signal audio              : signed(15 downto 0);
+
  signal is_noise  : std_logic;
- signal noise_rng : std_logic_vector(15 downto 0) := X"0001";
+ signal noise_rng : std_logic_vector(16 downto 0) := "00000000000000001";
  
  signal f0_z1,f0_z2 : signed(15 downto 0);
  signal f1_z1,f1_z2 : signed(15 downto 0);
@@ -165,9 +166,9 @@ architecture syn of sp0256 is
  signal f4_z1,f4_z2 : signed(15 downto 0);
  signal f5_z1,f5_z2 : signed(15 downto 0);
   
- signal lrq_in     : std_logic;
+ signal input_rdy_in     : std_logic;
  signal sound_on         : std_logic := '0';
- signal ald_r : std_logic;
+ signal trig_allophone_r : std_logic;
  signal line_cnt, rpt_cnt, per_cnt : std_logic_vector(7 downto 0);
  
  signal coeff_idx : std_logic_vector(6 downto 0);
@@ -191,73 +192,62 @@ architecture syn of sp0256 is
     496,    497,    498,    499,    500,    501,    502,    503,
     504,    505,    506,    507,    508,    509,    510,    511);
 
-
-component compressor is port 
- (
-		 clk   : in std_logic;
-		 din   : in signed(9 downto 0);
-		 dout  : out signed(8 downto 0)
- );
- 
- 
-end component;
-
 begin
 
-lrq <= lrq_in;
-clk_2m5_n <= not clk_2m5;
-stage <= stage_t / 10;
+input_rdy <= input_rdy_in;
+clock_250k_n <= not clock_250k;
 
 -- stage counter : Fs=250k/25 = 10kHz
-process (clk_2m5, reset)
+process (clock_250k, reset)
   begin
-	if reset='0' then
-		stage_t <= 0;
+	if reset='1' then
+		stage <= 0;
 	else
-      if rising_edge(clk_2m5) then
-			if stage_t >= 249 then 
-				stage_t <= 0;
+      if rising_edge(clock_250k) then
+			if stage >= 61 then 
+				stage <= 0;
 			else
-				stage_t <= stage_t + 1;
+				stage <= stage + 1;
 			end if;
 		end if;
 	end if;
 end process;
 
-process (clk_2m5, reset)
+process (clock_250k, reset)
   begin
-	if reset='0' then
-		lrq_in <= '1';
+	if reset='1' then
+		input_rdy_in <= '1'; 
 		sound_on  <= '0';
-		noise_rng <= X"0001";
+		noise_rng <= "00000000000000001";
 		bank <= "00";
 	else
-      if rising_edge(clk_2m5) then
+      if rising_edge(clock_250k) then
 			
-			ald_r <= ald;
-			if (ald_r = '1' and ald = '0') then
-				lrq_in <= '0';
-				allophone <= data_in;
+			trig_allophone_r <= trig_allophone;
+			if trig_allophone_r = '0' and trig_allophone = '1' then -- detect rising edge (trig_allophone)
+				input_rdy_in <= '0';
 			end if;
 			
-			stage_r <= stage;
-			if stage /= stage_r then
 			if sound_on = '0' then
 			
-				if stage = 0 and lrq_in = '0' then
-				 if allophone = "1100100" then bank <= "00";
+				if stage = 0 and input_rdy_in = '0' then
+				
+						-- filter the bankswitch commands
+				         if allophone = "1100100" then bank <= "00";
 						elsif allophone = "1101000" then bank <= "01";
 						elsif allophone = "1101001" then bank <= "10";
 						elsif allophone = "1101010" then bank <= "11";
 						elsif allophone <= "1011111" or allophone >= "1110000" then --filter the playable sounds
-					                                                            allo_entry <=          allophone*"11";
-																								   rom_addr   <= "00000"&(allophone*"11");
-					                                                            line_cnt   <= (others => '0');
-					                                                            rpt_cnt    <= (others => '0');
-					                                                            per_cnt    <= (others => '0');
-					                                                            sound_on   <= '1';					                                                            
+								allo_entry <=          allophone*"11"; -- alophone times 3
+								rom_addr   <= "00000"&(allophone*"11");
+								line_cnt   <= (others => '0');
+								rpt_cnt    <= (others => '0');
+								per_cnt    <= (others => '0');
+								sound_on   <= '1';
 						end if;
-						lrq_in <= '1';
+						
+						input_rdy_in <= '1';
+						
 				end if;
 				
 			else -- sound is on	
@@ -265,13 +255,13 @@ process (clk_2m5, reset)
 				case stage is
 					when 0 =>
 						rom_addr <= "00000"&allo_entry;						
-					when 1 =>
+					when 3 =>
 						allo_addr_msb <= rom_do;
 						rom_addr <= rom_addr + '1';
-					when 2 =>
+					when 6 =>
 						allo_addr_lsb <= rom_do;
 						rom_addr <= rom_addr + '1';
-					when 3 =>
+					when 9 =>
 						if rom_do = X"00" then
 							line_cnt <= (others => '0');
 							sound_on <= '0';
@@ -279,20 +269,21 @@ process (clk_2m5, reset)
 							allo_nb_line <= rom_do - '1';
 							rom_addr <= ((allo_addr_msb(1 downto 0) & allo_addr_lsb )+line_cnt) & X"0";
 						end if;
-					when 4 =>
+					when 12 =>
 						line_rpt <= rom_do - '1';
 						rom_addr <= rom_addr + '1';
-					when 5 =>
+					when 15 =>
 						line_amp_msb <= rom_do;
 						rom_addr <= rom_addr + '1';
-					when 6 =>
+					when 18 =>
 						
 						if per_cnt = X"00" then
 							amp <= signed(line_amp_msb & rom_do);
 						else
 							if is_noise = '1' then
 								if noise_rng(0) = '1' then
-									amp <= -amp;
+									--amp <= '1' & (not amp(14 downto 0)) ;
+									noise_out <= signed('1' & noise_rng (15 downto 1));
 								end if;
 							else
 								amp <= (others => '0');
@@ -310,7 +301,7 @@ process (clk_2m5, reset)
 							
 						rom_addr <= rom_addr + '1';
 						
-					when 7 =>
+					when 21 =>
 						if rom_do = X"00" then 
 							line_per <= X"40";
 							is_noise <= '1';
@@ -322,90 +313,94 @@ process (clk_2m5, reset)
 						filter   <= f0_z1;
 						divider  <= '0';
 						rom_addr <= rom_addr + '1';
-					when 8 =>
+					when 24 =>
 						sum_in1  <= sum_out;
 						filter   <= f0_z2;
 						divider  <= '1';
 						rom_addr <= rom_addr + '1';
 						
-					when 9 =>
+					when 27 =>
 						f0_z1    <= sum_out;
 						f0_z2    <= f0_z1;
 						sum_in1  <= sum_out;
 						filter   <= f1_z1;
 						divider  <= '0';
 						rom_addr <= rom_addr + '1';
-					when 10 =>
+					when 30 =>
 						sum_in1  <= sum_out;
 						filter   <= f1_z2;
 						divider  <= '1';
 						rom_addr <= rom_addr + '1';
 						
-					when 11 =>
+					when 33 =>
 						f1_z1    <= sum_out;
 						f1_z2    <= f1_z1;
 						sum_in1  <= sum_out;
 						filter   <= f2_z1;
 						divider  <= '0';
 						rom_addr <= rom_addr + '1';
-					when 12 =>
+						
+					when 36 =>
 						sum_in1  <= sum_out;
 						filter   <= f2_z2;
 						divider  <= '1';
 						rom_addr <= rom_addr + '1';
 						
-					when 13 =>
+					when 39 =>
 						f2_z1    <= sum_out;
 						f2_z2    <= f2_z1;
 						sum_in1  <= sum_out;
 						filter   <= f3_z1;
 						divider  <= '0';
 						rom_addr <= rom_addr + '1';
-					when 14 =>
+						
+					when 42 =>
 						sum_in1  <= sum_out;
 						filter   <= f3_z2;
 						divider  <= '1';
 						rom_addr <= rom_addr + '1';
 
-					when 15 =>
+					when 45 =>
 						f3_z1    <= sum_out;
 						f3_z2    <= f3_z1;
 						sum_in1  <= sum_out;
 						filter   <= f4_z1;
 						divider  <= '0';
 						rom_addr <= rom_addr + '1';
-					when 16 =>
+						
+					when 48 =>
 						sum_in1  <= sum_out;
 						filter   <= f4_z2;
 						divider  <= '1';
 						rom_addr <= rom_addr + '1';
 
-					when 17 =>
+					when 51 =>
 						f4_z1    <= sum_out;
 						f4_z2    <= f4_z1;
 						sum_in1  <= sum_out;
 						filter   <= f5_z1;
 						divider  <= '0';
 						rom_addr <= rom_addr + '1';
-					when 18 =>
+						
+					when 54 =>
 						sum_in1  <= sum_out;
 						filter   <= f5_z2;
 						divider  <= '1';
 						rom_addr <= rom_addr + '1';
 						
-					when 19 =>
+					when 57 =>
 						f5_z1    <= sum_out;
 						f5_z2    <= f5_z1;
 						
-						if sum_out > 510*16 then
-							audio <= to_signed(511,10);
-						elsif sum_out < -510*16 then
-						   audio <= to_signed(-512,10);
-						else
-							audio <= sum_out(13 downto 4);
-						end if;
-					
-					when 20 =>					
+--						if sum_out > 510*16 then
+--							audio <= to_signed(1023,16);
+--						elsif sum_out < -510*16 then
+--							audio <= to_signed(0,16);
+--						else
+--							audio <= (sum_out/16)+X"0200";						
+--						end if;
+					   audio <= sum_out;
+					when 60 =>					
 						if per_cnt >= line_per then
 							per_cnt <= (others => '0');
 							if rpt_cnt >= line_rpt then
@@ -424,32 +419,21 @@ process (clk_2m5, reset)
 							per_cnt <= per_cnt + '1';
 						end if;
 						
-						if noise_rng(0) = '1' then
-							noise_rng <= ('0' & noise_rng(15 downto 1) ) xor X"4001";
-						else
-							noise_rng <=  '0' & noise_rng(15 downto 1);
-						end if;
-
+						noise_rng <= noise_rng(15 downto 0) & (noise_rng(16) xor noise_rng(2));
+	
 					when others => null;
 				end case;
 			
 			end if;
-	     end if;
+	
 		end if;
 	end if;
 end process;
 
-compr: compressor
-port map
-(
-        clk  => clk_2m5,
-        din  => audio,
-        dout => audio_int
-);
 
+--audio_out <= std_logic_vector(unsigned(audio(9 downto 0)));
 
-audio_out <= audio_int(8) & audio_int;
-
+audio_out <= audio;
 
 -- filter computation
 coeff_idx <= rom_do(6 downto 0) when rom_do(7)='0' else
@@ -466,12 +450,15 @@ sum_out_ul <= sum_in1 + sum_in2(15 downto 0);
 sum_out <= to_signed( 32767,16) when sum_out_ul >  32767 else
 			  to_signed(-32768,16) when sum_out_ul < -32768 else
 			  sum_out_ul;
+
 			  
 sp256_003 : ENTITY work.sp256_003
 port map(
- clock  => clk_2m5_n,
+ clock  => clock_2m5,
+ clken  => clock_250k_n,
  address => bank & rom_addr,
  q => rom_do  
 );
+
 
 end syn;
