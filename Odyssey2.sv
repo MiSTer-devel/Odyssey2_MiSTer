@@ -590,12 +590,10 @@ wire cart_wr_n;
 wire [7:0] cart_di;
 
 wire signed [14:0] sound_s = {1'b0,snd,snd,snd,2'b0};
-//wire signed [14:0] voice_s = VOICE ? {voice_out[9],voice_out[9:1],4'b0} : 14'b0;
-wire signed [15:0] voice_s = VOICE ? {1'b0,voice_out[11:0],voice_out[15:10]} : 16'b0;
+wire signed [15:0] voice_s = VOICE ? {voice_out[11:0],4'b0} : 14'b0;
 
-//assign AUDIO_L = sound_s + voice_s;
-assign AUDIO_L = {voice_out[11:0],noise_voice[15:12]};
-assign AUDIO_R = snd;
+assign AUDIO_L = sound_s + voice_s;
+assign AUDIO_R = sound_s;
 assign AUDIO_S = 1;
 assign AUDIO_MIX = 0;
 

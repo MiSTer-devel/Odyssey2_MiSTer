@@ -204,7 +204,7 @@ process (clock_250k, reset)
 		stage <= 0;
 	else
       if rising_edge(clock_250k) then
-			if stage >= 61 then 
+			if stage >= 74 then 
 				stage <= 0;
 			else
 				stage <= stage + 1;
@@ -282,11 +282,12 @@ process (clock_250k, reset)
 						else
 							if is_noise = '1' then
 								if noise_rng(0) = '1' then
-									--amp <= '1' & (not amp(14 downto 0)) ;
-									noise_out <= signed('1' & noise_rng (15 downto 1));
+									amp <= -amp;
+									--noise_out <= signed('1' & noise_rng (15 downto 1));
 								end if;
 							else
 								amp <= (others => '0');
+								--noise_out <= (others => '0');
 							end if;
 						end if;
 						
@@ -392,13 +393,6 @@ process (clock_250k, reset)
 						f5_z1    <= sum_out;
 						f5_z2    <= f5_z1;
 						
---						if sum_out > 510*16 then
---							audio <= to_signed(1023,16);
---						elsif sum_out < -510*16 then
---							audio <= to_signed(0,16);
---						else
---							audio <= (sum_out/16)+X"0200";						
---						end if;
 					   audio <= sum_out;
 					when 60 =>					
 						if per_cnt >= line_per then
