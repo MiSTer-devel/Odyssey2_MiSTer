@@ -55,6 +55,8 @@
 
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.std_logic_unsigned.all;
+use ieee.numeric_std.all;
 
 entity vp_console is
   port (
@@ -63,6 +65,8 @@ entity vp_console is
     clk_i          : in  std_logic;
     clk_cpu_en_i   : in  std_logic;
     clk_vdc_en_i   : in  std_logic;
+	 clk_750k       : in  std_logic;
+	 clk_2m5        : in  std_logic;
     res_n_i        : in  std_logic;
     -- Cartridge Interface ----------------------------------------------------
     cart_cs_o      : out std_logic;
@@ -103,7 +107,13 @@ entity vp_console is
     vbl_o          : out std_logic;
     -- Sound Interface --------------------------------------------------------
     snd_o          : out std_logic;
-    snd_vec_o      : out std_logic_vector(3 downto 0)
+    snd_vec_o      : out std_logic_vector(3 downto 0);
+	 ---------------------------------------------------------------------------
+	 --- The voice -------------------------------------------------------------
+	 ---------------------------------------------------------------------------
+	 snd_voice_o     : out signed(15 downto 0);
+    voice_enable    : in  std_logic
+
   );
 
 end vp_console;
@@ -214,6 +224,29 @@ architecture struct of vp_console is
   signal vdd_s,
          gnd_s  : std_logic;
 
+  -- The Voice
+  signal sp0256_ldq : std_logic;
+  signal sp0256_load : std_logic;
+  signal sp0256_fifo_we : std_logic;
+  signal sp0256_p14 : std_logic;
+  signal sp0256_wr  : std_logic := '1';
+  signal sp0256_rst : std_logic := '1';
+  signal sp0256_ff  : std_logic := '1';
+  signal sp0256_ff_n  : std_logic := '1';
+  signal cart_do_s : std_logic_vector(7 downto 0);
+  signal sp0256_di : std_logic_vector(6 downto 0);
+  signal sp0256_do : std_logic_vector(6 downto 0);
+  signal cpu_t0_s  : std_logic := '0';
+  signal SP0256_trig : std_logic := '0';
+  signal SP0256_trig_ff : std_logic := '0';
+  signal fifo_empty_s : std_logic;
+  signal stage : integer := 1;
+
+  signal cart_cs_s : std_logic;
+  signal cart_wr_n_s : std_logic;
+
+
+		
 begin
 
   vdd_s <= '1';
@@ -232,7 +265,7 @@ begin
       xtal_i        => clk_i,
       xtal_en_i     => clk_cpu_en_i,
       reset_n_i     => res_n_i,
-      t0_i          => cart_t0_i,
+      t0_i          => not fifo_empty_s, --cart_t0_i,
       t0_o          => cart_t0_o,
       t0_dir_o      => cart_t0_dir_o,
       int_n_i       => int_n_s,
@@ -278,9 +311,9 @@ begin
       p14_i       => p1_from_cpu_s(4),
       p16_i       => p1_from_cpu_s(6),
       a_low_o     => a_low_s,
-      cart_cs_o   => cart_cs_o,
+      cart_cs_o   => cart_cs_s,
       cart_cs_n_o => cart_cs_n_o,
-      cart_wr_n_o => cart_wr_n_o,
+      cart_wr_n_o => cart_wr_n_s,
       ram_cs_o    => ram_cs_s,
       ram_cs_n_o  => ram_cs_n_s,
       ram_wr_n_o  => ram_wr_n_s,
@@ -296,6 +329,8 @@ begin
     );
   --
   cart_d_o <= db_from_cpu_s;
+  cart_cs_o   <= cart_cs_s;
+  cart_wr_n_o <= cart_wr_n_s;
 
 
   -----------------------------------------------------------------------------
@@ -434,5 +469,120 @@ begin
                     4 => joy_action_n_i(num),
                     others => '1');
   end generate;
+
+ -----------------------------------------------------------------------------
+  -- The Voice Module
+  -- Victor Trucco - 07/2019
+  -----------------------------------------------------------------------------
+  
+  
+  sp0256_ff_n <= not sp0256_ff;
+  
+  
+  process (sp0256_ff)
+  begin
+    if rising_edge(sp0256_ff) then
+        sp0256_rst <= db_from_cpu_s(5);
+        sp0256_di <= a_s(6 downto 0);     
+    end if;
+  end process;
+
+  process (clk_i)
+  begin
+    if rising_edge(clk_i) then
+        if a_s(7) = '1' and cart_wr_n_s = '0' and cart_cs_s = '0' and res_n_i = '1' and voice_enable = '1' then
+          sp0256_ff <= '0';
+        else 
+          sp0256_ff <= '1';
+        end if;
+
+        sp0256_fifo_we <= sp0256_ff;
+        
+        if fifo_empty_s = '1' then 
+          sp0256_load <= '0';
+        else
+          sp0256_load <= sp0256_ldq;
+        end if;
+      
+         
+        case (stage) is
+        
+          when 1 =>
+            sp0256_trig <= '0'; 
+            
+            if fifo_empty_s = '0' and sp0256_ldq = '1' then -- tem algo para tocar and SP free?
+              stage <= 2;
+            end if;
+            
+          when 2 =>
+            sp0256_trig <= '1'; 
+            stage <= 3;
+          
+          when 3 =>
+            if sp0256_ldq = '0' then 
+              sp0256_trig <= '0'; 
+              stage <= 1;
+            end if;
+          when others => stage <= 1;
+        
+        end case;
+        
+        sp0256_trig_ff <= sp0256_trig;
+    end if;
+  end process;
+  
+  
+  sp0256 : entity work.sp0256
+  port map
+  (
+    clock_750k      => clk_750k,
+	 clock_2m5       => clk_2m5,
+    reset           => not sp0256_rst, --reseta em '1'! 
+ 
+    input_rdy       => sp0256_ldq,  -- load request, is high when new allophone can be loaded
+                      -- IC LOAD REQUEST. LRQ is a logic 1
+                      --output whenever the input buffer is
+                      --full. When LRQ goes to a logic 0, the input
+                      --port may be loaded by placing the 8
+                      --address bits on A1-A8 and pulsing the
+                      --ALD output.
+    
+    allophone         => sp0256_do,
+    trig_allophone  => sp0256_trig_ff, -- input: positive pulse to trigger
+                          -- IC ADDRESS LOAD. A negative pulse on
+                          -- this input loads the 8 address bits into
+                          -- the input port. The negative edge of this
+                          -- pulse causes LRQ to go high.
+    
+    audio_out       => snd_voice_o
+	 
+    
+  
+  );
+  
+  fifo : entity work.fifo
+  generic map
+  (
+    DATA_WIDTH  => 7,
+    FIFO_DEPTH  => 64
+  )
+  port map 
+  ( 
+    clock_i     => clk_i,
+    reset_i     => not sp0256_rst, --not reset_n_s,
+    
+    -- input
+    fifo_we_i   => sp0256_fifo_we,
+    fifo_data_i   => sp0256_di,
+    
+    -- output
+    fifo_read_i   => sp0256_load,
+    fifo_data_o   => sp0256_do,
+
+    -- flags
+    fifo_empty_o  => fifo_empty_s,
+    fifo_full_o   => open
+  );
+
 
 end struct;

@@ -202,9 +202,9 @@ assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DD
 assign VGA_F1 = 0;
 assign VGA_SCALER = 0;
 
-assign LED_DISK = 0;
+assign LED_DISK = ioctl_download;
 assign LED_POWER = 0;
-assign LED_USER  = ioctl_download;
+assign LED_USER  = 0;
 assign BUTTONS = 0;
 
 assign VIDEO_ARX = (!status[19:18]) ? (status[14] ? 12'd5 : 12'd4) : (status[19:18] - 1'd1);
@@ -217,7 +217,7 @@ assign VIDEO_ARY = (!status[19:18]) ? (status[14] ? 12'd4 : 12'd3) : 12'd0;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXX XXXXXXXXXX  XX
+// XXXX   X XXXXXXX  XX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -233,6 +233,7 @@ parameter CONF_STR = {
  	"OIJ,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O9B,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"O1,The Voice,Off,On;",
+	"O23,Audio,voice(R)/Console(L),25%,50%,Center mixed;",
 	"-;",
 	"O7,Swap Joysticks,No,Yes;",
 	"-;",
@@ -303,16 +304,21 @@ wire clock_locked;
 wire clk_2m5;
 wire clk_sys;
 
-// pll pll
-// (
-// 	.refclk(CLK_50M),
-// 	.rst(0),
-// 	//.outclk_0(clk_sys_o2),
-// 	.outclk_0(clk_sys),
-// 	.outclk_1(clk_sys_vp),
-// 	.outclk_2(clk_2m5),
-// 	.locked(clock_locked)
-// );
+
+////////////The Voice /////////////////////////////////////////////////
+
+
+wire clk_750k;  
+
+ 
+pll_thevoice pll_thevoice
+( 
+  .inclk0(CLK_50M),
+  .c0    (clk_750k),
+  .c1    (clk_2m5)
+);
+
+////////////////////////////////////////////////////////////////////////
 
 wire [63:0] reconfig_to_pll;
 wire [63:0] reconfig_from_pll;
@@ -321,7 +327,7 @@ pll pll
 (
 	.refclk(CLK_50M),
 	.rst(0),
-	.outclk_0(clk_2m5),
+	.outclk_0(),
 	.outclk_1(clk_sys),
 	.reconfig_to_pll(reconfig_to_pll),
 	.reconfig_from_pll(reconfig_from_pll),
@@ -459,6 +465,8 @@ vp_console vp
 	.clk_i          (clk_sys),
 	.clk_cpu_en_i   (clk_cpu_en),
 	.clk_vdc_en_i   (clk_vdc_en),
+	.clk_750k       (clk_750k),
+	.clk_2m5        (clk_2m5),
 
 	.res_n_i        (~reset & joy_reset), // low to reset
 
@@ -472,7 +480,7 @@ vp_console vp
 	.cart_bs0_o     (cart_bank_0), // Bank switch 0
 	.cart_bs1_o     (cart_bank_1), // Bank Switch 1
 	.cart_psen_n_o  (cart_rd_n),   // Program Store Enable (read)
-	.cart_t0_i      (kb_read_ack || !ldq), // KB/Voice ack
+	.cart_t0_i      (),
 	.cart_t0_o      (),
 	.cart_t0_dir_o  (),
 	// Char Rom data
@@ -503,8 +511,12 @@ vp_console vp
 
 	// Sound
 	.snd_o          (),
-	.snd_vec_o      (snd)
-);
+	.snd_vec_o      (snd),
+	
+	//The voice
+	.voice_enable   (VOICE),
+	.snd_voice_o    (voice_out)
+); 
 
 ////////////////////////////////////////////////////////////////////////
 rom  rom
@@ -531,6 +543,9 @@ wire [11:0] cart_addr;
 wire [7:0]  cart_do;
 wire [11:0] char_addr;
 wire [7:0]  char_do;
+wire cart_wr_n;
+wire [7:0] cart_di;
+
 wire char_en;
 wire cart_bank_0;
 wire cart_bank_1;
@@ -571,21 +586,16 @@ always @(*)
 
 ////////////////////////////  SOUND  ////////////////////////////////////
 
-wire [3:0] snd;
-wire cart_wr_n;
-wire [7:0] cart_di;
+wire signed[3:0] snd;
+wire signed [15:0] voice_out; 
 
-// The Voice info:
-// $80 to $FF voice writes
-// Voice bank select:
-// $E4 internal voice rom bank
-// $E8, $E9, and $EA external rom banks
-// T0_i high if SP0256 command buffer full
+wire signed [15:0] sound_s = {2'b0,snd,snd,snd,2'b0};
+wire signed [15:0] voice_s = VOICE ? {voice_out[15],voice_out[11:0],3'b0} : 16'b0;
 
-assign AUDIO_L = VOICE ? {4'b0,snd,snd,4'b0} + voice_out * 2 :{2'b0, snd, snd,6'b0};//{audio, 6'd0};
-assign AUDIO_R = AUDIO_L;
+assign AUDIO_L = sound_s;
+assign AUDIO_R = voice_s;
 assign AUDIO_S = 1;
-assign AUDIO_MIX = 0;
+assign AUDIO_MIX = status[3:2];
 
 ////////////////////////////  VIDEO  ////////////////////////////////////
 
@@ -602,23 +612,20 @@ wire HBlank;
 
 wire ce_pix = clk_vdc_en;
 
-wire [7:0] Rx = color_lut_ntsc[{R, G, B, luma}][23:16];
-wire [7:0] Gx = color_lut_ntsc[{R, G, B, luma}][15:8];
-wire [7:0] Bx = color_lut_ntsc[{R, G, B, luma}][7:0];
-wire [7:0] Ry = color_lut_pal[{R, G, B, luma}][23:16];
-wire [7:0] Gy = color_lut_pal[{R, G, B, luma}][15:8];
-wire [7:0] By = color_lut_pal[{R, G, B, luma}][7:0];
+wire [7:0] Rx = color_lut_vp[{R, G, B, luma}][23:16];
+wire [7:0] Gx = color_lut_vp[{R, G, B, luma}][15:8];
+wire [7:0] Bx = color_lut_vp[{R, G, B, luma}][7:0];
 
 always @(*) begin
         casex (CONTRAST)
-           3'd1:    colors <= {{Ry[7:1],By[7]}  ,{Gy[7]  ,Ry[7:1]},{Ry[7:1],By[7]}  };
-                3'd2:    colors <= {{Ry[7:2],By[7:6]},{Gy[7:6],Ry[7:2]},{Ry[7:2],By[7:6]}};
-                3'd3:    colors <= {{Ry[7:4],By[7:4]},{Gy[7:4],Ry[7:4]},{Ry[7:4],By[7:4]}};
-                3'd4:    colors <= {Ry,Gy,By};
-                3'd5:    colors <= {{By[7:4],Ry[7:4]},{Gy[7:4],By[7:4]},{By[7:4],Ry[7:4]}};
-                3'd6:    colors <= {{By[7:2],Ry[7:6]},{Gy[7:6],By[7:2]},{By[7:2],Ry[7:6]}};
-                3'd7:    colors <= {{By[7:1],Ry[7]}  ,{Gy[7]  ,By[7:1]},{By[7:1],Ry[7]}  };
-           default: colors <= {Ry,Gy,By};
+                3'd1:    colors <= {{Rx[7:1],Bx[7]}  ,{Gx[7]  ,Rx[7:1]},{Rx[7:1],Bx[7]}  };
+                3'd2:    colors <= {{Rx[7:2],Bx[7:6]},{Gx[7:6],Rx[7:2]},{Rx[7:2],Bx[7:6]}};
+                3'd3:    colors <= {{Rx[7:4],Bx[7:4]},{Gx[7:4],Rx[7:4]},{Rx[7:4],Bx[7:4]}};
+                3'd4:    colors <= {Rx,Gx,Bx};
+                3'd5:    colors <= {{Bx[7:4],Rx[7:4]},{Gx[7:4],Bx[7:4]},{Bx[7:4],Rx[7:4]}};
+                3'd6:    colors <= {{Bx[7:2],Rx[7:6]},{Gx[7:6],Bx[7:2]},{Bx[7:2],Rx[7:6]}};
+                3'd7:    colors <= {{Bx[7:1],Rx[7]}  ,{Gx[7]  ,Bx[7:1]},{Bx[7:1],Rx[7]}  };
+           default: colors <= {Rx,Gx,Bx};
         endcase
 end
 
@@ -810,78 +817,26 @@ wire [1:0] joy_action = {~joya[4], ~joyb[4]};
 wire       joy_reset  = ~joya[5] & ~joyb[5];
 
 
-
-////////////The Voice /////////////////////////////////////////////////
-
-
-reg signed [9:0] voice_out;
-wire ldq;
-         
-
-sp0256 sp0256 (
-               .clk_2m5    (clk_2m5),
-               .reset      (rst_a_n),
-               .lrq        (ldq),
-               .data_in    (rom_addr[6:0]),
-               .ald        (ald),
-               .audio_out  (voice_out)
-);
-
-
-
-wire ald     = !rom_addr[7] | cart_wr_n | cart_cs;
-wire rst_a_n;
-
-
-
-ls74 ls74
-(
-		 .d     (cart_di[5]),
-       .clr   (VOICE? 1'b1: 1'b0),
-       .q     (rst_a_n),
-       .pre   (1'b1),
-       .clk   (ald)
-);
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // LUT using calibrated palette
-wire [23:0] color_lut_ntsc[16] = '{
-	24'h000000,    //BLACK
-	24'h676767,    //BLACK LUMA
-	24'h1a37be,
-	24'h5c80f6,
-	24'h006d07,
-	24'h56c469,
-	24'h2aaabe,
-	24'h77e6eb,
-	24'h790000,    //RED
-	24'hc75151,    //RED LUMA
-	24'h94309f,
-	24'hdc84e8,
-	24'h77670b,
-	24'hc6b86a,
-	24'hcecece,     //WHITE
-	24'hffffff      //WHITE LUMA
-};
-
-wire [23:0] color_lut_pal[16] = '{
-	24'h000000,    //BLACK
-	24'h494949,    //BLACK LUMA
-	24'h0000B6,    //Blue
-	24'h4949ff,
-	24'h00B601,    //Green
-	24'h49ff49,
-	24'h00b6c9,    //Cyan
-	24'h49ffff,
-	24'hB60000,    //RED
-	24'hff4949,    //RED LUMA
-	24'hb600b6,    //magenta
-	24'hff49ff,
-	24'hb6b600,    //Yellow
-	24'hffff49,
-	24'hb6b6b6,     //WHITE
-	24'hffffff      //WHITE LUMA
+wire [23:0] color_lut_vp[16] = '{
+	  24'h000000,    //BLACK
+	  24'h676767,    //GREY
+	  24'h1a37be,    //BLUE
+	  24'h5c80f6,    //BLUE I
+	  24'h006d07,    //GREEN
+	  24'h56c469,    //GREEN I
+	  24'h2aaabe,    //BLUE GREEN
+	  24'h77e6eb,    //BLUE-GREEN I
+	  24'h790000,    //RED
+	  24'hc75151,    //RED I
+	  24'h94309f,    //VIOLET
+	  24'hdc84e8,    //VIOLET I
+	  24'h77670b,    //KAHKI
+	  24'hc6b86a,    //KAHKI I
+	  24'hcecece,    //GREY I 
+	  24'hffffff     //WHITE
 };
 
 

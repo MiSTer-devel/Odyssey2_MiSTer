@@ -1,14 +1,12 @@
 set_global_assignment -name SDC_FILE Odyssey2.sdc
-
 set_global_assignment -name SYSTEMVERILOG_FILE Odyssey2.sv
-set_global_assignment -name VHDL_FILE rtl/sp0256/74ls74.vhd
 set_global_assignment -name QIP_FILE rtl/rom/char_rom.qip
 set_global_assignment -name QIP_FILE rtl/rom/rom.qip
 set_global_assignment -name VERILOG_FILE rtl/vga_to_greyscale.v
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/sp0256/compressor.sv
-set_global_assignment -name VHDL_FILE rtl/sp0256/sp0256_al2_decoded.vhd
-set_global_assignment -name VHDL_FILE rtl/sp0256/sp0256_256b_019_decoded.vhd
 set_global_assignment -name VHDL_FILE rtl/sp0256/sp0256.vhd
+set_global_assignment -name QIP_FILE rtl/sp0256/pll_thevoice.qip
+set_global_assignment -name VHDL_FILE rtl/sp0256/fifo.vhd
+set_global_assignment -name QIP_FILE rtl/sp0256/sp256_003.qip
 set_global_assignment -name VHDL_FILE rtl/t48/rom_t48.vhd
 set_global_assignment -name VHDL_FILE rtl/vp_keymap-c.vhd
 set_global_assignment -name VHDL_FILE rtl/vp_keymap.vhd
@@ -104,5 +102,4 @@ set_global_assignment -name VHDL_FILE rtl/vp_console_comp_pack-p.vhd
 set_global_assignment -name VHDL_FILE rtl/vp_console.vhd
 set_global_assignment -name CDF_FILE jtag.cdf
 set_global_assignment -name QIP_FILE sys/sys.qip
-set_global_assignment -name QIP_FILE rtl/sp0256/sp256_003.qip
 
