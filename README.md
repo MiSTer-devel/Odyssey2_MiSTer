@@ -11,7 +11,7 @@
  * Correct Sound, timings and better collision detection.
  * "The Voice" peripheral.
  * available on:
-   * **MiSTer**
+   * **MiSTer** (on official updates)
    * **MiST**
    * **SiDi**
    * **Neptuno**
@@ -21,9 +21,9 @@
  
 
 ## Installation
-Copy the *.rbf file to your SD card. Create an **Videopac** folder on the card, and place Odyssey2/Videopac roms (\*.BIN) inside this folder. XROM dumps (at the moment only known Musician and 4 in a row) must be renamed to \*.rom.
+Copy the *.rbf file to your SD card. Create an **Oddysey** folder on the card, and place Odyssey2/Videopac roms (\*.BIN) inside this folder. XROM dumps (at the moment only known Musician and 4 in a row) must be renamed to \*.rom.
 
-When loading a ROM, most games will prompt the user with "SELECT GAME". Press 0-9 on the keyboard or mapped controller button to play the game. Unfortunately, there is no on-screen display of the game options, so looking at the [instruction manuals](https://videopac.weebly.com/) may be helpful in selecting a game. Note that the system did not have a well defined player 1 or player 2 controller, they would alternate on a game-to-game basis. You may need to swap controllers to use the input.
+When loading a ROM, most games will prompt the user with "SELECT GAME". Press 0-9 on the keyboard or mapped controller button to play the game. Unfortunately, there is no on-screen display of the game options, so looking at the [instruction manuals](https://videopac.ch/) may be helpful in selecting a game. Note that the system did not have a well defined player 1 or player 2 controller, they would alternate on a game-to-game basis. You may need to swap controllers to use the correct joystick.
 
 ## Known Issues
 
@@ -37,7 +37,8 @@ When loading a ROM, most games will prompt the user with "SELECT GAME". Press 0-
 * **Antonio Sanchez** For the LX16 port.
 * **Wilco2009** For the SD-cart for the real console and for helping with hardware internals and tricks his [sd cartridge](https://wilco2009.blogspot.com/2020/) for the real console is a must!.
 * [**Neuro**](https://github.com/neurorulez) For the Neptuno and Unamiga reloaded Ports.
-* [**Benitoss**](https://github.com/benitoss) for the ZX Next port (soon)
+* [**Benitoss**](https://github.com/benitoss) for the ZX Next port (soon).
+* [**G7200**](https://github.com/G7200) Betatesting and instructions manuals.
 
 ## Some ROMS.
 *  You can download almost all the console roms from the [René van dem Enden](http://www.ozyr.com/rene/VP_O2-roms777.zip) site. This .zip file contains 220 games and is 765 kB. 
