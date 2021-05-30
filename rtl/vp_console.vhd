@@ -65,7 +65,7 @@ entity vp_console is
     clk_i          : in  std_logic;
     clk_cpu_en_i   : in  std_logic;
     clk_vdc_en_i   : in  std_logic;
-	 clk_250k       : in  std_logic;
+	 clk_750k       : in  std_logic;
 	 clk_2m5        : in  std_logic;
     res_n_i        : in  std_logic;
     -- Cartridge Interface ----------------------------------------------------
@@ -112,7 +112,6 @@ entity vp_console is
 	 --- The voice -------------------------------------------------------------
 	 ---------------------------------------------------------------------------
 	 snd_voice_o     : out signed(15 downto 0);
-	 noise_voice_o   : out signed(15 downto 0);
     voice_enable    : in  std_logic
 
   );
@@ -536,7 +535,7 @@ begin
   sp0256 : entity work.sp0256
   port map
   (
-    clock_250k      => clk_250k,
+    clock_750k      => clk_750k,
 	 clock_2m5       => clk_2m5,
     reset           => not sp0256_rst, --reseta em '1'! 
  
@@ -555,9 +554,8 @@ begin
                           -- the input port. The negative edge of this
                           -- pulse causes LRQ to go high.
     
-    audio_out       => snd_voice_o,
+    audio_out       => snd_voice_o
 	 
-	 noise_out       => noise_voice_o
     
   
   );

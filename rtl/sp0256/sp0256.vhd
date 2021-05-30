@@ -18,6 +18,11 @@
 --	 rev 2.0 - 26/07/2019 - by Victor Trucco
 --			sound banks handling
 --
+--  rev 2.1 - 24/05/2021 - By rampa
+--       clock raise to 750k
+--       clock at 2.5Mhz for BRAM access.
+--       audio at full 16bit(for fixing the sound on turtles
+--
 ---------------------------------------------------------------------------------
 --
 -- SP0256-al2 prom decoding scheme and speech synthesis algorithm are from :
@@ -96,18 +101,7 @@
 --
 --		(sum_out will be limited to -32768/+32767)
 --
---  Audio output scaling to 10bits unsigned:
---
---    what :
---      Last filter output is limited to -8192/+8191
---      Then divided by 16 => -512/+511
---      Then offset by 512 => 0/1023
---
---    how: 
---      if    X >  8191, Y <= 1023
---      elsif X < -8192, Y <= 0
---      else             Y <= (X/16)+512
---
+
 ---------------------------------------------------------------------------------
 
 library ieee;
@@ -118,7 +112,7 @@ use ieee.numeric_std.all;
 entity sp0256 is
 port
 (
-	clock_250k   : in std_logic;
+	clock_750k   : in std_logic;
 	clock_2m5    : in std_logic;
 	reset        : in std_logic;
 
@@ -127,7 +121,6 @@ port
 	allophone      : in  std_logic_vector(6 downto 0);
 	trig_allophone : in  std_logic;
 	
-	noise_out    : out signed(15 downto 0);
 	audio_out    : out signed(15 downto 0)
 	
 		
@@ -136,7 +129,7 @@ end sp0256;
 
 architecture syn of sp0256 is
   
- signal clock_250k_n  : std_logic;
+ signal clock_750k_n  : std_logic;
  signal rom_addr 		: std_logic_vector(13 downto 0);
  signal rom_do   		: std_logic_vector( 7 downto 0);
  signal bank 			: std_logic_vector( 1 downto 0);
@@ -195,15 +188,15 @@ architecture syn of sp0256 is
 begin
 
 input_rdy <= input_rdy_in;
-clock_250k_n <= not clock_250k;
+clock_750k_n <= not clock_750k;
 
 -- stage counter : Fs=250k/25 = 10kHz
-process (clock_250k, reset)
+process (clock_750k, reset)
   begin
 	if reset='1' then
 		stage <= 0;
 	else
-      if rising_edge(clock_250k) then
+      if rising_edge(clock_750k) then
 			if stage >= 74 then 
 				stage <= 0;
 			else
@@ -213,7 +206,7 @@ process (clock_250k, reset)
 	end if;
 end process;
 
-process (clock_250k, reset)
+process (clock_750k, reset)
   begin
 	if reset='1' then
 		input_rdy_in <= '1'; 
@@ -221,7 +214,7 @@ process (clock_250k, reset)
 		noise_rng <= "00000000000000001";
 		bank <= "00";
 	else
-      if rising_edge(clock_250k) then
+      if rising_edge(clock_750k) then
 			
 			trig_allophone_r <= trig_allophone;
 			if trig_allophone_r = '0' and trig_allophone = '1' then -- detect rising edge (trig_allophone)
@@ -283,11 +276,9 @@ process (clock_250k, reset)
 							if is_noise = '1' then
 								if noise_rng(0) = '1' then
 									amp <= -amp;
-									--noise_out <= signed('1' & noise_rng (15 downto 1));
 								end if;
 							else
 								amp <= (others => '0');
-								--noise_out <= (others => '0');
 							end if;
 						end if;
 						
@@ -425,7 +416,6 @@ process (clock_250k, reset)
 end process;
 
 
---audio_out <= std_logic_vector(unsigned(audio(9 downto 0)));
 
 audio_out <= audio;
 
@@ -449,7 +439,7 @@ sum_out <= to_signed( 32767,16) when sum_out_ul >  32767 else
 sp256_003 : ENTITY work.sp256_003
 port map(
  clock  => clock_2m5,
- clken  => clock_250k_n,
+ clken  => clock_750k_n,
  address => bank & rom_addr,
  q => rom_do  
 );
