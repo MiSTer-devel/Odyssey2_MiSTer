@@ -105,6 +105,7 @@ entity vp_console is
     vsync_n_o      : out std_logic;
     hbl_o          : out std_logic;
     vbl_o          : out std_logic;
+	 hblank_o       : out std_logic;
     -- Sound Interface --------------------------------------------------------
     snd_o          : out std_logic;
     snd_vec_o      : out std_logic_vector(3 downto 0);
@@ -349,6 +350,7 @@ begin
       vsync_o    => vsync_s,
       ms_i       => vdd_s,
       hbl_o      => hbl_s,
+		hblank_o   => hblank_o,
       vbl_i      => gnd_s,
       vbl_o      => vbl_s,
       cx_i       => gnd_s,
