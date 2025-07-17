@@ -67,7 +67,8 @@ entity i8244_sync_gen is
     vbl_o         : out std_logic;
     hpos_o        : out pos_t;
     vpos_o        : out pos_t;
-    hor_int_o     : out std_logic
+    hor_int_o     : out std_logic;
+	  hblank_o      : out std_logic
   );
 
 end i8244_sync_gen;
@@ -127,6 +128,8 @@ architecture rtl of i8244_sync_gen is
   signal bg_q          : std_logic;
   signal vbl_q         : std_logic;
   signal hor_int_q     : std_logic;
+  
+  signal hblank_q    : std_logic;
 
 begin
 
@@ -158,6 +161,7 @@ begin
       bg_q         <= '0';
       vbl_q        <= '0';
       hor_int_q    <= '0';
+		hblank_q     <= '0';
 
     elsif rising_edge(clk_i) then
       last_frame_line_v := last_frame_line_c(is_pal_g);
@@ -176,7 +180,7 @@ begin
         -- horizontal position counter ----------------------------------------
         vinc_v   := false;
         if    vbl_sync_v then
-          -- sync to pixel 1 in new line
+          -- sync to pixel 1
           hpos_q <= to_pos_f(1);
         else
           if hpos_q = last_hpos_c then
@@ -220,6 +224,7 @@ begin
 
           if hpos_q = last_hsync_c and vpos_q = 0 then
             hbl_q   <= '0';
+				hblank_q <= '0';
           end if;
 
           -- hsync
@@ -228,6 +233,13 @@ begin
           elsif hpos_q = last_hsync_c then
             hsync_q <= '0';
           end if;
+			 
+			 --real hblank
+			 if hpos_q = first_hblank_c - 1  then
+				hblank_q <= '1';
+			 elsif hpos_q = last_hpos_c -1 then
+				hblank_q <= '0';
+			 end if;
 
           -- vsync
           if    vpos_q = first_vsync_c - 1 then
@@ -281,5 +293,6 @@ begin
   hpos_o        <= hpos_q;
   vpos_o        <= vpos_q;
   hor_int_o     <= hor_int_q;
+  hblank_o      <= hblank_q;
 
 end rtl;
