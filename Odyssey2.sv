@@ -50,7 +50,7 @@ module emu
 	input         RESET,
 
 	//Must be passed to hps_io module
-	inout  [45:0] HPS_BUS,
+	inout  [48:0] HPS_BUS,
 
 	//Base video clock. Usually equals to CLK_SYS.
 	output        CLK_VIDEO,
@@ -60,8 +60,15 @@ module emu
 	output        CE_PIXEL,
 
 	//Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
-	output [11:0] VIDEO_ARX,
-	output [11:0] VIDEO_ARY,
+	output [12:0] VIDEO_ARX,
+	output [12:0] VIDEO_ARY,
+	
+	input  [11:0] HDMI_WIDTH,
+	input  [11:0] HDMI_HEIGHT,
+	output        HDMI_FREEZE,
+	output        HDMI_BLACKOUT,
+	output        HDMI_BOB_DEINT,
+
 
 	output  [7:0] VGA_R,
 	output  [7:0] VGA_G,
@@ -72,6 +79,7 @@ module emu
 	output        VGA_F1,
 	output [1:0]  VGA_SL,
 	output        VGA_SCALER, // Force VGA scaler
+	output        VGA_DISABLE, // analog out is off
 
 `ifdef USE_FB
 	// Use framebuffer in DDRAM (USE_FB=1 in qsf)
@@ -199,16 +207,22 @@ assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;  
 
+assign VGA_SL = 0;
 assign VGA_F1 = 0;
-assign VGA_SCALER = 0;
+assign VGA_SCALER  = 0;
+assign VGA_DISABLE = 0;
+assign HDMI_FREEZE = 0;
+assign HDMI_BLACKOUT = 0;
+assign HDMI_BOB_DEINT = 0;
 
-assign LED_DISK = ioctl_download;
+assign LED_DISK = 0;
 assign LED_POWER = 0;
-assign LED_USER  = 0;
 assign BUTTONS = 0;
 
-assign VIDEO_ARX = (!status[19:18]) ? (status[14] ? 12'd5 : 12'd4) : (status[19:18] - 1'd1);
-assign VIDEO_ARY = (!status[19:18]) ? (status[14] ? 12'd4 : 12'd3) : 12'd0;
+wire [1:0] ar = status[122:121];
+
+assign VIDEO_ARX = (!ar) ? 12'd4 : (ar - 1'd1);
+assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
 
 
 ////////////////////////////  HPS I/O  //////////////////////////////////
@@ -220,7 +234,7 @@ assign VIDEO_ARY = (!status[19:18]) ? (status[14] ? 12'd4 : 12'd3) : 12'd0;
 // XXXX   X XXXXXXX  XX
 
 `include "build_id.v"
-parameter CONF_STR = {
+localparam CONF_STR = {
 	"ODYSSEY2;;",
 	"-;",
 	"F1,BIN,Load catridge;",
@@ -244,7 +258,7 @@ parameter CONF_STR = {
 
 wire forced_scandoubler;
 wire  [1:0] buttons;
-wire [31:0] status;
+wire [127:0] status;
 wire [10:0] ps2_key;
 wire [21:0] gamma_bus;
 wire        ioctl_download;
@@ -258,14 +272,12 @@ wire  [7:0] ioctl_index;
 wire [15:0] joystick_0,joystick_1;
 wire [24:0] ps2_mouse;
 
-hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
+hps_io #(.CONF_STR(CONF_STR)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 	.EXT_BUS(),
 	.gamma_bus(gamma_bus),
-
-	.conf_str(CONF_STR),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_wr(ioctl_wr),
@@ -334,6 +346,8 @@ pll pll
 	.locked(clock_locked)
 );
 
+
+
 wire        cfg_waitrequest;
 reg         cfg_write;
 reg   [5:0] cfg_address;
@@ -352,6 +366,8 @@ pll_cfg pll_cfg
 	.reconfig_to_pll(reconfig_to_pll),
 	.reconfig_from_pll(reconfig_from_pll)
 );
+
+wire [1:0] col = status[4:3];
 
 always @(posedge CLK_50M) begin : cfg_block
 	reg pald = 0, pald2 = 0;
@@ -609,6 +625,9 @@ wire HSync;
 wire VSync;
 wire VBlank;
 wire HBlank;
+wire [7:0] video;
+wire ce_pix_out; 
+wire freeze_sync;
 
 wire ce_pix = clk_vdc_en;
 
@@ -633,7 +652,6 @@ end
 wire [23:0] colors;
 
 assign CLK_VIDEO = clk_sys;
-assign VGA_SL = sl[1:0];
 assign VGA_F1 = 0;
 
 
@@ -654,18 +672,19 @@ vga_to_greyscale vga_to_greyscale
 
 video_mixer #(.LINE_LENGTH(455)) video_mixer
 (
-	.*,
-	.clk_vid(clk_sys),
+
+   .*,
+	//.clk_vid(clk_sys),
 	.HBlank(HBlank),
 	.VBlank(VBlank),
-	.HSync(~HSync),
-	.VSync(~VSync),
-	.ce_pix_out(CE_PIXEL),
+	.HSync(HSync),
+	.VSync(VSync),
+	//.ce_pix(ce_pix),
 
 	.scandoubler(scale || forced_scandoubler),
-	.scanlines(0),
+	//.scanlines(0),
 	.hq2x(scale==1),
-	.mono(0),
+	//.mono(0),
 
 	.R(G7200 ? grayscale : Rx),
    .G(G7200 ? grayscale : Gx),
@@ -673,6 +692,8 @@ video_mixer #(.LINE_LENGTH(455)) video_mixer
 
 );
 
+assign CLK_VIDEO = clk_sys;
+//assign CE_PIXEL = ce_pix;
 
 ////////////////////////////  INPUT  ////////////////////////////////////
 
