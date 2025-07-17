@@ -63,6 +63,7 @@ entity i8244_top_sync is
     vsync_o    : out std_logic;
     ms_i       : in  std_logic;
     hbl_o      : out std_logic;
+	 hblank_o   : out std_logic;
     vbl_i      : in  std_logic;
     vbl_o      : out std_logic;
     cx_i       : in  std_logic;
@@ -118,6 +119,7 @@ begin
       vsync_o    => vsync_o,
       ms_i       => ms_i,
       hbl_o      => hbl_o,
+		hblank_o   => hblank_o,
       vbl_i      => vbl_i,
       vbl_o      => vbl_o,
       cx_i       => cx_i,
