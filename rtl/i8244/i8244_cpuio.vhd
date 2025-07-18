@@ -215,6 +215,8 @@ architecture rtl of i8244_cpuio is
   signal vbl_q        : std_logic;
   signal sound_int_q,
          ext_int_q    : boolean;
+			
+  signal vbl_int_q    : std_logic; -- vertical blanking interrupt signal
   signal intr_q       : boolean;
   signal major_coll_q : boolean;
 
@@ -368,6 +370,7 @@ begin
       vbl_q        <= '0';
       sound_int_q  <= false;
       ext_int_q    <= false;
+		vbl_int_q    <= '0';
       intr_q       <= false;
       major_coll_q <= false;
 
@@ -638,11 +641,13 @@ begin
         if snd_int_i then
           sound_int_q <= true;
         end if;
+		  if vbl_i = '1' and vbl_q = '0' then
+			  vbl_int_q <= '1'; -- seperates the vblank interrupt signal/ register from the vblank timing
+		  end if;
         if (ext_int_q and reg_ctrl_q(bit_ctrl_en_ext_overlap_c) = '1') or
-           (sound_int_q and reg_ctrl_q(bit_ctrl_en_sound_int_c) = '1') or
-           (hor_int_i and reg_ctrl_q(bit_ctrl_en_hor_int_c)) = '1'     or 
-           (vbl_i = '1' and vbl_q = '0') then
-          intr_q <= true;
+           (sound_int_q and reg_ctrl_q(bit_ctrl_en_sound_int_c) = '1') or -- sound interrupt possbily doesn't exist, but appears to have no impact
+           vbl_int_q = '1' then
+          intr_q <= true; -- removed horizontal interrupt as it doesn't exist and routine call unwanted slowdowns especially in blockout
         end if;
 
       end if;
@@ -650,6 +655,7 @@ begin
       if rd_pulse_s and addr_q = addr_ctrl_stat_c then
         ext_int_q   <= false;
         sound_int_q <= false;
+		  vbl_int_q   <= '0'; -- vertical blank interrupt to 0 after status register read
         intr_q      <= false;
       end if;
 
@@ -847,10 +853,10 @@ begin
 
       -- CONTROL STATUS register
       when addr_ctrl_stat_c =>
-        dout_o <= (0 => not hor_int_i,
+        dout_o <= (0 => hor_int_i, -- reversed interrupt bit, fixes midscreen colour changes in blockout
                    1 => pos_strobe_s,
                    2 => to_stdlogic(sound_int_q),
-                   3 => vbl_i,
+                   3 => vbl_int_q,-- so vblank routine reads the interrupt not the vblank timing signals
                    6 => to_stdlogic(ext_int_q),
                    7 => to_stdlogic(major_coll_q),
                    others => '0');
