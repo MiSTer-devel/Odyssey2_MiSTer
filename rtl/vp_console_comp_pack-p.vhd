@@ -60,6 +60,7 @@ package vp_console_comp_pack is
       vsync_n_o      : out std_logic;
       hbl_o          : out std_logic;
       hblank_o       : out std_logic;
+      vblank_o       : out std_logic;
       vbl_o          : out std_logic;
       -- Sound Interface ------------------------------------------------------
       snd_o          : out std_logic;
