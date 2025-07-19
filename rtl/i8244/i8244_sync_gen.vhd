@@ -188,8 +188,8 @@ begin
         -- horizontal position counter ----------------------------------------
         vinc_v   := false;
         if    vbl_sync_v then
-          -- sync to pixel 1? in new line - lets try 0 to fix that artifact
-          hpos_q <= to_pos_f(0);
+          -- sync to pixel 1
+          hpos_q <= to_pos_f(1);
         else
           if hpos_q = last_hpos_c then
             hpos_q <= to_pos_f(0);
