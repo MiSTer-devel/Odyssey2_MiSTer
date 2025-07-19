@@ -67,6 +67,8 @@ entity i8244_core is
     vsync_o    : out std_logic;
     ms_i       : in  std_logic;
     hbl_o      : out std_logic;
+    hblank_o   : out std_logic;
+    vblank_o   : out std_logic;
     vbl_i      : in  std_logic;
     vbl_o      : out std_logic;
     cx_i       : in  std_logic;
@@ -191,7 +193,9 @@ begin
       vbl_o         => vbl_s,
       hpos_o        => hpos_s,
       vpos_o        => vpos_s,
-      hor_int_o     => hor_int_s
+      hor_int_o     => hor_int_s,
+      hblank_o      => hblank_o,
+      vblank_o      => vblank_o
     );
   --
   vbl_o <= vbl_s;

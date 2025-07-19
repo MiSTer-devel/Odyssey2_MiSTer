@@ -43,6 +43,8 @@ package i8244_core_comp_pack is
       vsync_o    : out std_logic;
       ms_i       : in  std_logic;
       hbl_o      : out std_logic;
+		hblank_o   : out std_logic;
+		vblank_o   : out std_logic;
       vbl_i      : in  std_logic;
       vbl_o      : out std_logic;
       cx_i       : in  std_logic;
@@ -77,8 +79,10 @@ package i8244_core_comp_pack is
       vsync_o    : out std_logic;
       ms_i       : in  std_logic;
       hbl_o      : out std_logic;
+      hblank_o   : out std_logic;
       vbl_i      : in  std_logic;
       vbl_o      : out std_logic;
+      vblank_o   : out std_logic;
       cx_i       : in  std_logic;
       l_o        : out std_logic;
       cs_n_i     : in  std_logic;

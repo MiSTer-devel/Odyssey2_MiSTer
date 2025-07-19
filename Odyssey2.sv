@@ -522,8 +522,8 @@ vp_console vp
 	.l_o            (luma),
 	.hsync_n_o      (HSync),
 	.vsync_n_o      (VSync),
-	.hbl_o          (HBlank),
-	.vbl_o          (VBlank),
+	.hblank_o          (HBlank),
+	.vblank_o          (VBlank),
 
 	// Sound
 	.snd_o          (),

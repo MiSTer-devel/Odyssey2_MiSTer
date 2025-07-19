@@ -41,6 +41,8 @@ package i8244_comp_pack is
       ms_i          : in  std_logic;
       vbl_i         : in  std_logic;
       hbl_o         : out std_logic;
+      hblank_o      : out std_logic;
+      vblank_o      : out std_logic;
       hsync_o       : out std_logic;
       vsync_o       : out std_logic;
       bg_o          : out std_logic;
